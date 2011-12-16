@@ -1,0 +1,1 @@
+An flexible iphone style spinner for the web, with support for browsers and mobile devices.
