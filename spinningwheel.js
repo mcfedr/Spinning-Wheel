@@ -18,32 +18,69 @@
  * Released under MIT license
  * http://cubiq.org/dropbox/mit-license.txt
  * 
- * Version 2.0 - Last updated: 2011.12.16
+ * Version 3.0 - Last updated: 2013.03.01
  * 
  */
 (function() {
-	var vendor = (/webkit/i).test(navigator.appVersion) ? 'webkit' :
-		(/firefox/i).test(navigator.userAgent) ? 'Moz' :
-		'opera' in window ? 'O' : '',
+	var dummyStyle = document.createElement('div').style,
+		vendor = (function () {
+			var vendors = 't,webkitT,MozT,msT,OT'.split(','),
+				t,
+				i = 0,
+				l = vendors.length;
 
-	// Browser capabilities
-	has3d = 'WebKitCSSMatrix' in window && 'm11' in new WebKitCSSMatrix(),
-	hasTouch = 'ontouchstart' in window,
-	hasTransform = vendor + 'Transform' in document.documentElement.style,
+			for ( ; i < l; i++ ) {
+				t = vendors[i] + 'ransform';
+				if ( t in dummyStyle ) {
+					return vendors[i].substr(0, vendors[i].length - 1);
+				}
+			}
+
+			return false;
+		})(),
+		cssVendor = vendor ? '-' + vendor.toLowerCase() + '-' : '',
+
+		// Style properties
+		transform = prefixStyle('transform'),
+		transitionProperty = prefixStyle('transitionProperty'),
+		transitionDuration = prefixStyle('transitionDuration'),
+		transformOrigin = prefixStyle('transformOrigin'),
+		transitionTimingFunction = prefixStyle('transitionTimingFunction'),
+		transitionDelay = prefixStyle('transitionDelay'),
+
+		// Browser capabilities
+		isAndroid = (/android/gi).test(navigator.appVersion),
+		isIDevice = (/iphone|ipad/gi).test(navigator.appVersion),
+		isTouchPad = (/hp-tablet/gi).test(navigator.appVersion),
 	
-	RESIZE_EV = 'onorientationchange' in window ? 'orientationchange' : 'resize',
-	START_EV = hasTouch ? 'touchstart' : 'mousedown',
-	MOVE_EV = hasTouch ? 'touchmove' : 'mousemove',
-	END_EV = hasTouch ? 'touchend' : 'mouseup',
-	//CANCEL_EV = hasTouch ? 'touchcancel' : 'mouseup',
-	//WHEEL_EV = vendor == 'Moz' ? 'DOMMouseScroll' : 'mousewheel',
+		has3d = prefixStyle('perspective') in dummyStyle,
+		hasTouch = 'ontouchstart' in window && !isTouchPad,
+		hasTransform = vendor !== false,
+		hasTransitionEnd = prefixStyle('transition') in dummyStyle,
 
-	// Helpers
-	trnOpen = 'translate' + (has3d ? '3d(' : '('),
-	trnClose = has3d ? ',0)' : ')',
-	trnEnd = (vendor == 'Moz') ? 'transitionend' : (vendor == 'O' ? 'o' : vendor) + 'TransitionEnd';
+		RESIZE_EV = 'onorientationchange' in window ? 'orientationchange' : 'resize',
+		START_EV = hasTouch ? 'touchstart' : 'mousedown',
+		MOVE_EV = hasTouch ? 'touchmove' : 'mousemove',
+		END_EV = hasTouch ? 'touchend' : 'mouseup',
+		//CANCEL_EV = hasTouch ? 'touchcancel' : 'mouseup',
+		//WHEEL_EV = vendor == 'Moz' ? 'DOMMouseScroll' : 'mousewheel',
+		TRNEND_EV = (function () {
+			if ( vendor === false ) return false;
 
-	var SpinningWheel = {
+			var transitionEnd = {
+					''			: 'transitionend',
+					'webkit'	: 'webkitTransitionEnd',
+					'Moz'		: 'transitionend',
+					'O'			: 'otransitionend',
+					'ms'		: 'MSTransitionEnd'
+				};
+
+			return transitionEnd[vendor];
+		})(),
+		
+		// Helpers
+		translateZ = has3d ? ' translateZ(0)' : '',
+		SpinningWheel = {
 		cellHeight: 44,
 		friction: 0.003,
 		slotData: [],
@@ -77,7 +114,7 @@
 				} else if (this.scrollHasStarted/* || e.currentTarget.id == 'sw-frame'*/) {
 					this.scrollEnd(e);
 				}
-			} else if (e.type == trnEnd) {
+			} else if (e.type == TRNEND_EV) {
 				if (e.target.id == 'sw-wrapper') {
 					this.destroy();
 				} else {
@@ -146,7 +183,11 @@
 			div = document.createElement('div');
 			div.id = 'sw-wrapper';
 			div.style.top = (this.container ? this.container.clientHeight : (window.innerHeight + window.pageYOffset)) + 'px';		// Place the SW down the actual viewing screen
-			div.style[vendor + 'TransitionProperty'] = '-' + vendor.toLowerCase() + '-transform';
+			div.style[transitionProperty] = hasTransform ? cssVendor + 'transform' : 'top left';
+			div.style[transitionDuration] = '400ms';
+			if(!hasTransform) {
+				div.style.position = 'absolute';
+			}
 			div.innerHTML = '<div id="sw-header"><div id="sw-cancel">Cancel</' + 'div><div id="sw-done">Done</' + 'div></' + 'div><div id="sw-slots-wrapper"><div id="sw-slots"></' + 'div></' + 'div><div id="sw-frame"></' + 'div>';
 
 			(this.container || document.body).appendChild(div);
@@ -155,7 +196,13 @@
 			this.swSlotWrapper = document.getElementById('sw-slots-wrapper');		// Slots visible area
 			this.swSlots = document.getElementById('sw-slots');						// Pseudo table element (inner wrapper)
 			this.swFrame = document.getElementById('sw-frame');						// The scrolling controller
-
+			if(!('borderImage' in document.body.style || 'webkitBorderImage' in document.body.style)) {
+				this.swFrame.style.borderWidth = 0;
+				this.swFrame.style.height = '215px';
+				this.swFrame.style.background = 'url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAADXCAYAAAAwRYC4AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo3MzExQUJGOTdBNzAxMUUyQTREQ0Y2NUVCQTI2RTQwNiIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo3MzExQUJGQTdBNzAxMUUyQTREQ0Y2NUVCQTI2RTQwNiI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjczMTFBQkY3N0E3MDExRTJBNERDRjY1RUJBMjZFNDA2IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjczMTFBQkY4N0E3MDExRTJBNERDRjY1RUJBMjZFNDA2Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+CK03FgAAASlJREFUeNpivH799n8GIGC5evUuA5jBwPAfxmAEs5gYoAAh9f8/uhQjI1Rq2bKFjCAGo5KC5h2oLoY/MMZv3CJwxi9SpPCIECP1izJd5Ln5NxGhgUcEk/EXgwGX+ocqlZaRBxH5D4/l//A4hUYlPqn//zFSAroUMdpJtJ0kNXArGAiqYeVRAbMYz51/ugklPQ8hBsvy5RcPDlnHf/nzuAccBUAcDkurr2CMDzDGVxjjJxFJ/R+Gmv+41fxHYTBD8X8YgwGFwYTCgPuCGeoBHAxi1EDKTGtrd7TUC0urzGzMbIxfP39iZIFZzAIzHTuDBYMBl2LFrYYVtwgmg40yEWIYrFRSTJIL8TAgweLr76cKji8FRR1o8kMqmhhRUzgwAhlRykw8UgABBgCFIa30CoPe0wAAAABJRU5ErkJggg==) repeat-x';
+				div.style.background = 'white';
+			}
+			
 			// Create HTML slot elements
 			for (l = 0; l < this.slotData.length; l += 1) {
 				// Create the slot
@@ -179,7 +226,7 @@
 				ul.slotYPosition = 0;
 				ul.slotWidth = 0;
 				ul.slotMaxScroll = this.swSlotWrapper.clientHeight - ul.clientHeight - 86;
-				ul.style[vendor + 'TimingFunction'] = 'cubic-bezier(0, 0, 0.2, 1)';		// Add default transition
+				if (hasTransform) ul.style[transitionTimingFunction] = 'cubic-bezier(0, 0, 0.2, 1)';
 
 				this.slotEl.push(ul);			// Save the slot for later use
 
@@ -195,7 +242,7 @@
 			document.addEventListener(START_EV, this, false);			// Prevent page scrolling
 			document.addEventListener(MOVE_EV, this, false);
 			document.addEventListener(END_EV, this, false);			// Prevent page scrolling
-			window.addEventListener('orientationchange', this, true);		// Optimize SW on orientation change
+			window.addEventListener(RESIZE_EV, this, true);		// Optimize SW on orientation change
 			window.addEventListener('scroll', this, true);				// Reposition SW on page scroll
 
 			// Cancel/Done buttons events
@@ -209,9 +256,14 @@
 		open: function () {
 			this.create();
 
-			this.swWrapper.style[vendor + 'TimingFunction'] = 'ease-out';
-			this.swWrapper.style[vendor + 'TransitionDuration'] = '400ms';
-			this.swWrapper.style[vendor + 'Transform'] = trnOpen + '0, -260px' + trnClose;
+			this.swWrapper.style[transitionTimingFunction] = 'ease-out';
+			if (hasTransform) {
+				this.swWrapper.style[transform] = 'translate(0, -260px)' + translateZ;
+			}
+			else {
+				this.swWrapper.style.left = 0;
+				this.swWrapper.style.top = -260 + 'px';
+			}
 		},
 
 
@@ -222,7 +274,7 @@
 		 */
 
 		destroy: function () {
-			this.swWrapper.removeEventListener(trnEnd, this, false);
+			this.swWrapper.removeEventListener(TRNEND_EV, this, false);
 
 			this.swFrame.removeEventListener(START_EV, this, false);
 
@@ -231,7 +283,7 @@
 
 			document.removeEventListener(START_EV, this, false);
 			document.removeEventListener(MOVE_EV, this, false);
-			window.removeEventListener('orientationchange', this, true);
+			window.removeEventListener(RESIZE_EV, this, true);
 			window.removeEventListener('scroll', this, true);
 
 			this.slotData = [];
@@ -249,11 +301,16 @@
 		},
 
 		close: function () {
-			this.swWrapper.style[vendor + 'TimingFunction'] = 'ease-in';
-			this.swWrapper.style[vendor + 'TransitionDuration'] = '400ms';
-			this.swWrapper.style[vendor + 'Transform'] = trnOpen + '0, 0' + trnClose;
-
-			this.swWrapper.addEventListener(trnEnd, this, false);
+			this.swWrapper.style[transitionTimingFunction] = 'ease-in';
+			if (hasTransform) {
+				this.swWrapper.style[transform] = 'translate(0, 0)' + translateZ;
+			}
+			else {
+				this.swWrapper.style.left = 0;
+				this.swWrapper.style.top = 0;
+			}
+			
+			this.swWrapper.addEventListener(TRNEND_EV, this, false);
 		},
 
 
@@ -288,8 +345,8 @@
 			for (i in this.slotEl) {
 				if(this.slotEl.hasOwnProperty(i)) {
 					// Remove any residual animation
-					this.slotEl[i].removeEventListener(trnEnd, this, false);
-					this.slotEl[i].style[vendor + 'TransitionDuration'] = '0';
+					this.slotEl[i].removeEventListener(TRNEND_EV, this, false);
+					this.slotEl[i].style[transitionDelay] = '0';
 
 					if (this.slotEl[i].slotYPosition > 0) {
 						this.setPosition(i, 0);
@@ -326,7 +383,13 @@
 
 		setPosition: function (slot, pos) {
 			this.slotEl[slot].slotYPosition = pos;
-			this.slotEl[slot].style[vendor + 'Transform'] = trnOpen + '0, ' + pos + 'px' + trnClose;
+			if(hasTransform) {
+				this.slotEl[slot].style[transform] = 'translate(0, ' + pos + 'px)' + translateZ;
+			}
+			else {
+				this.slotEl[slot].style.left = 0;
+				this.slotEl[slot].style.top = pos;
+			}
 		},
 
 		scrollStart: function (e) {
@@ -359,11 +422,11 @@
 				return false;
 			}
 
-			this.slotEl[this.activeSlot].removeEventListener(trnEnd, this, false);	// Remove transition event (if any)
-			this.slotEl[this.activeSlot].style[vendor + 'TransitionDuration'] = '0';		// Remove any residual transition
+			this.slotEl[this.activeSlot].removeEventListener(TRNEND_EV, this, false);	// Remove transition event (if any)
+			this.slotEl[this.activeSlot].style[transitionDelay] = '0';                 // Remove any residual transition
 
 			// Stop and hold slot position
-			var theTransform = window.getComputedStyle(this.slotEl[this.activeSlot])[vendor + 'Transform'];
+			//var theTransform = window.getComputedStyle(this.slotEl[this.activeSlot])[vendor + 'Transform'];
 			//theTransform = new WebKitCSSMatrix(theTransform).m42;
 			//if (theTransform != this.slotEl[this.activeSlot].slotYPosition) {
 			//	this.setPosition(this.activeSlot, theTransform);
@@ -461,20 +524,20 @@
 		},
 
 		scrollTo: function (slotNum, dest, runtime) {
-			this.slotEl[slotNum].style[vendor + 'TransitionDuration'] = runtime ? runtime : '100ms';
+			this.slotEl[slotNum].style[transitionDuration] = runtime ? runtime : '100ms';
 			this.setPosition(slotNum, dest ? dest : 0);
 
 			// If we are outside of the boundaries go back to the sheepfold
 			if (this.slotEl[slotNum].slotYPosition > 0 || this.slotEl[slotNum].slotYPosition < this.slotEl[slotNum].slotMaxScroll) {
-				this.slotEl[slotNum].addEventListener(trnEnd, this, false);
+				this.slotEl[slotNum].addEventListener(TRNEND_EV, this, false);
 			}
 		},
 
 		scrollToValue: function (slot, value) {
 			var yPos, count, i;
 
-			this.slotEl[slot].removeEventListener(trnEnd, this, false);
-			this.slotEl[slot].style[vendor + 'TransitionDuration'] = '0';
+			this.slotEl[slot].removeEventListener(TRNEND_EV, this, false);
+			this.slotEl[slot].style[transitionDuration] = '0';
 
 			count = 0;
 			for (i in this.slotData[slot].values) {
@@ -491,7 +554,7 @@
 		},
 
 		backWithinBoundaries: function (e) {
-			e.target.removeEventListener(trnEnd, this, false);
+			e.target.removeEventListener(TRNEND_EV, this, false);
 
 			this.scrollTo(e.target.slotPosition, e.target.slotYPosition > 0 ? 0 : e.target.slotMaxScroll, '150ms');
 			return false;
@@ -544,5 +607,15 @@
 			return true;
 		}
 	};
+	
+	function prefixStyle (style) {
+		if ( vendor === '' ) return style;
+
+		style = style.charAt(0).toUpperCase() + style.substr(1);
+		return vendor + style;
+	}
+
+	dummyStyle = null;	// for the sake of it
+	
 	window.SpinningWheel = SpinningWheel;
 })();
